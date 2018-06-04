@@ -1,2 +1,16 @@
 image_path: 'G:\Workspace\DS&Alg-Project1-Release\data\image'
-use_pretrained_vgg16: False
+use_image: False
+use_pretrained_vgg16: True
+test_images: 'G:\hp\Desktop\bird'
+make_prediction: True
+result_category_map:
+  0: n03767203[WaterWheel]
+  1: n07897438[Bottle]
+  2: n01613177[Bird]
+  3: n04515003[Piano]
+  4: n10247358[Woman]
+  5: n02278980[Butterfly]
+  6: n04583620[Airplane]
+  7: n03877845[Building]
+  8: n11669921[Flower]
+  9: n01923025[Insect]
