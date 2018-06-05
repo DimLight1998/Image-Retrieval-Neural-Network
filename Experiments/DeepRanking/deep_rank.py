@@ -2,13 +2,12 @@ from keras.applications import VGG16
 from keras.layers import Dense, Conv2D, MaxPool2D, GlobalAveragePooling2D, Dropout, Lambda, Flatten, Concatenate
 from keras import Model, Input
 from keras import backend as K
-from Experiments.DeepRanking.sample_gen import generate_triplet
 
 BATCH_SIZE = 8 * 3
 
 
 def deep_rank_model():
-    image_input = Input(shape=(224, 224, 3))
+    image_input = Input(shape=(225, 225, 3))
     vgg16 = VGG16(weights='imagenet', include_top=False)
     vgg16.trainable = False
     conv_result = vgg16(image_input)
@@ -20,22 +19,23 @@ def deep_rank_model():
     x = Lambda(lambda arg: K.l2_normalize(arg, axis=1))(x)
     convnet = Model(inputs=image_input, outputs=x)
 
-    first_input = Input(shape=(224, 224, 3))
-    first_conv = Conv2D(96, kernel_size=(8, 8), strides=(16, 16), padding='same')(first_input)
-    first_max = MaxPool2D(pool_size=(3, 3), strides=(4, 4), padding='same')(first_conv)
+    first_conv = Conv2D(1, kernel_size=(4, 4), strides=(4, 4), padding='same')(image_input)
+    first_conv = Conv2D(96, kernel_size=(8, 8), strides=(4, 4), padding='same')(first_conv)
+    first_max = MaxPool2D(pool_size=(3, 3), strides=(3, 3), padding='valid')(first_conv)
     first_max = Flatten()(first_max)
     first_max = Lambda(lambda arg: K.l2_normalize(arg, axis=1))(first_max)
 
-    second_input = Input(shape=(224, 224, 3))
-    second_conv = Conv2D(96, kernel_size=(8, 8), strides=(32, 32), padding='same')(second_input)
-    second_max = MaxPool2D(pool_size=(7, 7), strides=(2, 2), padding='same')(second_conv)
+    second_conv = Conv2D(1, kernel_size=(8, 8), strides=(8, 8), padding='same')(image_input)
+    second_conv = Conv2D(96, kernel_size=(8, 8), strides=(4, 4), padding='same')(second_conv)
+    second_max = MaxPool2D(pool_size=(2, 2), strides=(2, 2), padding='valid')(second_conv)
     second_max = Flatten()(second_max)
     second_max = Lambda(lambda arg: K.l2_normalize(arg, axis=1))(second_max)
 
     merge = Concatenate()([first_max, second_max, convnet.output])
     emb = Dense(1024)(merge)
     l2_normed = Lambda(lambda arg: K.l2_normalize(arg, axis=1))(emb)
-    deep_rank_model_ret = Model(inputs=[first_input, second_input, image_input], outputs=l2_normed)
+    deep_rank_model_ret = Model(inputs=image_input, outputs=l2_normed)
+
     return deep_rank_model_ret
 
 

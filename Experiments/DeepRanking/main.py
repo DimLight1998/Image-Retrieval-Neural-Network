@@ -1,14 +1,15 @@
-from Experiments.DeepRanking import similar_img_gen
 from Experiments.DeepRanking.deep_rank import *
 from Experiments.DeepRanking.sample_gen import *
-from keras.preprocessing import image as keras_image
 from keras.optimizers import SGD
 from keras.callbacks import ModelCheckpoint
-from matplotlib import pyplot as plt
+from keras.models import load_model
 
 if __name__ == '__main__':
-    model = deep_rank_model()
-    sgd = SGD(lr=0.001)
-    model.compile(sgd, loss=hinge_loss)
-    model.fit_generator(train_data_genaerator, 16, epoches=128,
-                        callbacks=[ModelCheckpoint(f'weights.{epoch}.h5')])
+    if 'weights.h5' in os.listdir('.'):
+        print('Loading model.')
+        model = load_model('weights.h5')
+    else:
+        model = deep_rank_model()
+        sgd = SGD(lr=0.001)
+        model.compile(sgd, loss=hinge_loss)
+    model.fit_generator(train_data_generator(), 128, 128, callbacks=[ModelCheckpoint('weights.h5')])
