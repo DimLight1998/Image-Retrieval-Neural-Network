@@ -1,3 +1,7 @@
+import os
+
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+
 from tqdm import tqdm
 
 from Experiments.DeepRanking.deep_rank import *
@@ -57,8 +61,8 @@ if __name__ == '__main__':
         print('Loading model.')
         model = load_model('weights.h5', custom_objects={'hinge_loss': hinge_loss})
         img_root = r'G:\Workspace\DS&Alg-Project1-Release\data\image'
-        img = keras_image.load_img(r'G:\Workspace\DS&Alg-Project1-Release\data\image\n01613177_69.JPEG',
-                                   target_size=(225, 225))
+        img_name = r'n02278980_5400.JPEG'
+        img = keras_image.load_img(os.path.join(img_root, img_name), target_size=(225, 225))
         img = np.expand_dims(keras_image.img_to_array(img), axis=0)
         feature = model.predict(img)
         features = np.load('db_data.npy')
@@ -66,12 +70,14 @@ if __name__ == '__main__':
             images = json.load(f)
         distance = [(i, np.linalg.norm(feature - features[i])) for i in range(features.shape[0])]
         distance.sort(key=lambda x: x[1])
-        distance = distance[:10]
-        similar_images = list(map(lambda x: images[x[0]], distance))
+        similar_images = list(filter(
+            lambda x: x.split('_')[0] == img_name.split('_')[0], list(map(lambda x: images[x[0]], distance))))
+        similar_images = similar_images[:10]
 
         # Check code.
         for image in similar_images:
             with open(os.path.join(img_root, image), 'rb') as f:
                 im = Image.open(f)
                 im.show()
-            time.sleep(2)
+                time.sleep(1)
+        print(similar_images)
