@@ -1,23 +1,26 @@
 from imgaug import augmenters as iaa
 import imgaug as ia
 import numpy as np
+from matplotlib import pyplot as plt
 
 
 def sometimes(aug): return iaa.Sometimes(0.5, aug)
 
 
 seq = iaa.Sequential([
-    iaa.Fliplr(0.15),
+    iaa.Fliplr(0.02),
     iaa.Crop(percent=(0, 0.1)),
-    iaa.Sometimes(0.5, iaa.GaussianBlur(sigma=(0, 0.5))),
-    iaa.ContrastNormalization((0.75, 1.5)),
-    iaa.AdditiveGaussianNoise(loc=0, scale=(0.0, 0.05 * 255), per_channel=0.5),
-    iaa.Multiply((0.8, 1.2), per_channel=0.2),
+    iaa.Sometimes(0.3, iaa.GaussianBlur(sigma=(0, 0.5))),
+    iaa.Sometimes(0.3, iaa.Superpixels(0.5, 125)),
+    iaa.Add((-5, 5), True),
     iaa.Affine(
         scale={"x": (0.8, 1.2), "y": (0.8, 1.2)},
         translate_percent={"x": (-0.2, 0.2), "y": (-0.2, 0.2)},
-        rotate=(-25, 25),
-        shear=(-8, 8))
+        rotate=(-10, 10),
+        shear=(-5, 5)),
+    iaa.OneOf([
+        iaa.PerspectiveTransform(0.05),
+        iaa.PiecewiseAffine(0.02)])
 ], random_order=True)
 
 

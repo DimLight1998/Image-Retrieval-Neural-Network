@@ -1,5 +1,5 @@
 import os
-
+#
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
 from tqdm import tqdm
@@ -19,7 +19,7 @@ from PIL import Image
 def hinge_loss(_, y_pred):
     y_pred = K.clip(y_pred, K.epsilon(), 1 - K.epsilon())
     loss = K.variable(0, dtype='float32')
-    gap = K.constant(4, dtype='float32', shape=[1])
+    gap = K.constant(1, dtype='float32', shape=[1])
     for i in range(0, BATCH_SIZE, 3):
         q_emb = y_pred[i + 0]
         p_emb = y_pred[i + 1]
@@ -39,6 +39,7 @@ if __name__ == '__main__':
             model = load_model('weights.h5', custom_objects={'hinge_loss': hinge_loss})
         else:
             model = deep_rank_model()
+        # sgd = SGD(lr=0.001)
         sgd = SGD(lr=0.001, momentum=0.9, nesterov=True)
         model.compile(sgd, loss=hinge_loss)
         model.fit_generator(train_data_generator(), 128, 128, shuffle=False, callbacks=[ModelCheckpoint('weights.h5')])
@@ -48,10 +49,10 @@ if __name__ == '__main__':
         img_root = r'G:\Workspace\DS&Alg-Project1-Release\data\image'
         image_names = os.listdir(img_root)
         images = []
-        features = np.zeros((len(image_names), 1024))
+        features = np.zeros((len(image_names), 512))
         for i, image_name in tqdm(list(enumerate(image_names)), ascii=True):
             images.append(image_name)
-            image = keras_image.load_img(os.path.join(img_root, image_name), target_size=(225, 225))
+            image = keras_image.load_img(os.path.join(img_root, image_name), target_size=(299, 299))
             image = keras_image.img_to_array(image)
             features[i] = model.predict(np.expand_dims(image, axis=0))
         with open('db_index.json', 'w+') as f:
@@ -61,8 +62,8 @@ if __name__ == '__main__':
         print('Loading model.')
         model = load_model('weights.h5', custom_objects={'hinge_loss': hinge_loss})
         img_root = r'G:\Workspace\DS&Alg-Project1-Release\data\image'
-        img_name = r'n02278980_5400.JPEG'
-        img = keras_image.load_img(os.path.join(img_root, img_name), target_size=(225, 225))
+        img_name = r'n01613177_4814.JPEG'
+        img = keras_image.load_img(os.path.join(img_root, img_name), target_size=(299, 299))
         img = np.expand_dims(keras_image.img_to_array(img), axis=0)
         feature = model.predict(img)
         features = np.load('db_data.npy')
