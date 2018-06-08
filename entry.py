@@ -169,6 +169,7 @@ def deep_rank_model():
 def get_category_number(name, config):
     return config['category_map'][name.split('_')[0]]
 
+
 if __name__ == '__main__':
     # Load configuration.
     with open('config.yaml') as f:
