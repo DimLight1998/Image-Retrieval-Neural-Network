@@ -27,3 +27,40 @@ result_category_map:
   7: n03877845 # Building
   8: n11669921 # Flower
   9: n01923025 # Insect
+
+image_root: 'G:\Workspace\DS&Alg-Project1-Release\data\image'
+
+# Mode. [train_classify, classify, train_rank, index_rank, similar_rank]
+mode: train_rank
+
+category_map:
+  n03767203: 0
+  n07897438: 1
+  n01613177: 2
+  n04515003: 3
+  n10247358: 4
+  n02278980: 5
+  n04583620: 6
+  n03877845: 7
+  n11669921: 8
+  n01923025: 9
+
+category_map_rev:
+  0: n03767203
+  1: n07897438
+  2: n01613177
+  3: n04515003
+  4: n10247358
+  5: n02278980
+  6: n04583620
+  7: n03877845
+  8: n11669921
+  9: n01923025
+
+path_files_to_be_classified:
+  balah1
+  balah2
+
+path_files_to_be_found_similar:
+  cate_alpha
+  '1_G:\Workspace...'

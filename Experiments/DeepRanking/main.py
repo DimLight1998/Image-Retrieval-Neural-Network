@@ -74,11 +74,3 @@ if __name__ == '__main__':
         similar_images = list(filter(
             lambda x: x.split('_')[0] == img_name.split('_')[0], list(map(lambda x: images[x[0]], distance))))
         similar_images = similar_images[:10]
-
-        # Check code.
-        for image in similar_images:
-            with open(os.path.join(img_root, image), 'rb') as f:
-                im = Image.open(f)
-                im.show()
-                time.sleep(1)
-        print(similar_images)
