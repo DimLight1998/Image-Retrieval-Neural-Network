@@ -1,10 +1,11 @@
 import json
 import os
 import random
-
+import cv2
 import keras
 import numpy as np
 import yaml
+
 from imgaug import augmenters as iaa
 from keras import Model, Input
 from keras import backend as K
@@ -19,6 +20,9 @@ from keras.callbacks import ModelCheckpoint
 from tqdm import tqdm as tqdm
 
 BATCH_SIZE = 3 * 3
+SPLIT_NUM = 4
+H_CHANNEL = 4
+S_CHANNEL = 4
 
 seq = iaa.Sequential([
     iaa.Fliplr(0.02),
@@ -35,6 +39,50 @@ seq = iaa.Sequential([
         iaa.PerspectiveTransform(0.05),
         iaa.PiecewiseAffine(0.02)])
 ], random_order=True)
+
+
+def get_image_hist(image_path):
+    image = cv2.imread(image_path)
+    num_row = image.shape[0]
+    num_col = image.shape[1]
+    dense_hist = np.zeros((SPLIT_NUM, SPLIT_NUM, H_CHANNEL, S_CHANNEL))
+    for i in range(SPLIT_NUM):
+        for j in range(SPLIT_NUM):
+            img_slice = image[
+                        int(i * num_row / SPLIT_NUM):int((i + 1) * num_row / SPLIT_NUM),
+                        int(j * num_col / SPLIT_NUM):int((j + 1) * num_col / SPLIT_NUM)]
+            hsv = cv2.cvtColor(img_slice, cv2.COLOR_BGR2HSV)
+            hist_slice = cv2.calcHist([hsv], [0, 1], None, [H_CHANNEL, S_CHANNEL], [0, 180, 0, 256])
+            cv2.normalize(hist_slice, hist_slice)
+            while True:
+                new_hist = (np.vectorize(lambda arg: 0 if arg < 0.01 else arg))(hist_slice)
+                cv2.normalize(new_hist, new_hist)
+                if np.array_equal(new_hist, hist_slice):
+                    break
+                else:
+                    hist_slice = new_hist
+            dense_hist[i, j] = hist_slice
+    return dense_hist
+
+
+def get_signature_from_hist(hist):
+    sig = np.array([], dtype=np.float32).reshape((0, 5))
+    for i in range(SPLIT_NUM):
+        for j in range(SPLIT_NUM):
+            for k in range(H_CHANNEL):
+                for l in range(S_CHANNEL):
+                    if hist[i, j, k, l] != 0:
+                        sig = np.concatenate((sig, np.array([hist[i, j, k, l], i, j, k, l]).reshape(1, 5)))
+    return sig
+
+
+def get_em_distance(image_path_1, image_path_2):
+    hist1 = get_image_hist(image_path_1)
+    sig1 = get_signature_from_hist(hist1).astype(np.float32)
+    hist2 = get_image_hist(image_path_2)
+    sig2 = get_signature_from_hist(hist2).astype(np.float32)
+    distance = cv2.EMD(sig1, sig2, cv2.DIST_L2)[0]
+    return distance
 
 
 def hinge_loss(_, y_pred):
@@ -206,11 +254,12 @@ elif mode == 'similar_rank':
         index = json.load(f)
     data = np.load('db_data.npy')
     images = config['path_files_to_be_found_similar']
+    image_root = config['image_root']
 
     result = {}
     for cat_path in images:
-        image_cat = cat_path.split('_')[0]
-        image_path = cat_path.split('_')[1]
+        image_cat = cat_path.split('@')[0]
+        image_path = cat_path.split('@')[1]
         image = keras_image.load_img(image_path, target_size=(299, 299))
         image = keras_image.img_to_array(image)
         image = preprocess_input(np.expand_dims(image, axis=0))
@@ -219,6 +268,12 @@ elif mode == 'similar_rank':
         distance_rank = []
         for i in range(distances.shape[0]):
             distances.append((np.linalg.norm(distances[i])), index[i])
+        distance_rank.sort(key=lambda arg: arg[0])
+        distance_rank = distance_rank[:20]
+        for i in range(len(distance_rank)):
+            image_1_path = os.path.join(image_root, distance_rank[i][1])
+            image_2_path = image_path
+            distance_rank[i][0] = get_em_distance(image_1_path, image_2_path)
         distance_rank.sort(key=lambda arg: arg[0])
         distance_rank = distance_rank[:10]
         result[cat_path] = distance_rank

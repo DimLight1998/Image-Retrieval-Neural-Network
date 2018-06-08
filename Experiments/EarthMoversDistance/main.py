@@ -8,6 +8,7 @@ from matplotlib import pyplot as plt
 split_n = 4
 split_m = 4
 
+
 def get_normalized_hs_histogram(image_path: str) -> np.ndarray:
     img = cv2.imread(image_path)
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
@@ -25,7 +26,8 @@ def get_normalized_hs_histogram_n_m(image_path: str) -> np.ndarray:
     for i in range(split_m):
         hist_row = []
         for j in range(split_n):
-            img_split = img[int(p[0] * i / split_m) : int(p[0] * (i + 1) / split_m), int(p[1] * j / split_n) : int(p[1] * (j + 1) / split_n)]
+            img_split = img[int(p[0] * i / split_m): int(p[0] * (i + 1) / split_m),
+                        int(p[1] * j / split_n): int(p[1] * (j + 1) / split_n)]
             hsv = cv2.cvtColor(img_split, cv2.COLOR_BGR2HSV)
             hist_split = cv2.calcHist([hsv], [0, 1], None, [3, 4], [0, 180, 0, 256])
             hist_row.append(hist_split)
@@ -46,6 +48,7 @@ def get_hs_histogram_emd(hist1: np.ndarray, hist2: np.ndarray):
 
     distance = cv2.EMD(signature1, signature2, cv2.DIST_L2)[0]
     return distance
+
 
 def get_hs_histogram_emd_n_m(hist1: np.ndarray, hist2: np.array):
     assert hist1.shape == hist2.shape
@@ -68,10 +71,13 @@ def get_hs_histogram_emd_n_m(hist1: np.ndarray, hist2: np.array):
 
 
 if __name__ == '__main__':
-    image_dir = r'/media/dz/Data/University/2018Spring/Data_Structure_and_Algorithms(2)/DS&Alg-Project1-Release/data/image'
-    query = 'n01613177_69.JPEG'
-    hist_query = get_normalized_hs_histogram(os.path.join(image_dir, query))
+    image_dir = r'G:\Workspace\DS&Alg-Project1-Release\data\image'
 
+    hist_query = get_normalized_hs_histogram(os.path.join(image_dir, 'n01613177_4810.JPEG'))
+    hist_query = get_normalized_hs_histogram(os.path.join(image_dir, 'n01613177_4814.JPEG'))
+
+    query = 'n01613177_70.JPEG'
+    get_normalized_hs_histogram_n_m(os.path.join(image_dir, query))
     min_distance = None
     min_file = None
     for i in tqdm.tqdm(os.listdir(image_dir), ascii=True, ncols=200):
