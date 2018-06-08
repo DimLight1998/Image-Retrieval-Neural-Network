@@ -169,112 +169,112 @@ def deep_rank_model():
 def get_category_number(name, config):
     return config['category_map'][name.split('_')[0]]
 
+if __name__ == '__main__':
+    # Load configuration.
+    with open('config.yaml') as f:
+        config = yaml.load(f)
 
-# Load configuration.
-with open('config.yaml') as f:
-    config = yaml.load(f)
+    mode = config['mode']
 
-mode = config['mode']
+    if mode == 'train_classify':
+        # Use a new model.
+        input_layer = Input(shape=(299, 299, 3))
+        rn_model = InceptionResNetV2(weights='imagenet', include_top=False, input_shape=(299, 299, 3))
+        rn_model.trainable = False
+        x = rn_model(input_layer)
+        x = Flatten()(x)
+        x = Dense(512, activation='relu')(x)
+        x = Dropout(0.5)(x)
+        x = Dense(512, activation='relu')(x)
+        x = Dropout(0.5)(x)
+        x = Dense(10, activation='softmax')(x)
+        model = Model(inputs=input_layer, outputs=x)
 
-if mode == 'train_classify':
-    # Use a new model.
-    input_layer = Input(shape=(299, 299, 3))
-    rn_model = InceptionResNetV2(weights='imagenet', include_top=False, input_shape=(299, 299, 3))
-    rn_model.trainable = False
-    x = rn_model(input_layer)
-    x = Flatten()(x)
-    x = Dense(512, activation='relu')(x)
-    x = Dropout(0.5)(x)
-    x = Dense(512, activation='relu')(x)
-    x = Dropout(0.5)(x)
-    x = Dense(10, activation='softmax')(x)
-    model = Model(inputs=input_layer, outputs=x)
+        sgd = SGD(0.0002)
+        model.compile(loss='categorical_crossentropy', optimizer=sgd, metrics=['acc'])
 
-    sgd = SGD(0.0002)
-    model.compile(loss='categorical_crossentropy', optimizer=sgd, metrics=['acc'])
+        # Prepare data.
+        image_root = config['image_root']
+        category_map = config['category_map']
+        image_names = os.listdir(image_root)
+        random.shuffle(image_names)
+        features = np.zeros((len(image_names), 299, 299, 3))
+        for i, image_path in tqdm(list(enumerate(image_names)), ascii=True):
+            image = keras_image.load_img(os.path.join(image_root, image_path), target_size=(299, 299))
+            features[i] = keras_image.img_to_array(image)
+        features = preprocess_input(features)
+        labels = np.array(list(map(lambda arg: category_map[arg.split('_')[0]], image_names))).reshape((-1, 1))
+        labels = keras.utils.to_categorical(labels, num_classes=len(category_map))
 
-    # Prepare data.
-    image_root = config['image_root']
-    category_map = config['category_map']
-    image_names = os.listdir(image_root)
-    random.shuffle(image_names)
-    features = np.zeros((len(image_names), 299, 299, 3))
-    for i, image_path in tqdm(list(enumerate(image_names)), ascii=True):
-        image = keras_image.load_img(os.path.join(image_root, image_path), target_size=(299, 299))
-        features[i] = keras_image.img_to_array(image)
-    features = preprocess_input(features)
-    labels = np.array(list(map(lambda arg: category_map[arg.split('_')[0]], image_names))).reshape((-1, 1))
-    labels = keras.utils.to_categorical(labels, num_classes=len(category_map))
-
-    # Start train.
-    model.fit(features, labels, batch_size=4, epochs=16, validation_split=0.1)
-    model.save('./resnet.h5')
-elif mode == 'classify':
-    model = load_model('./resnet.h5')
-    paths = config['path_files_to_be_classified']
-    features = np.zeros((len(paths), 299, 299, 3))
-    for i, image_path in tqdm(list(enumerate(paths)), ascii=True):
-        image = keras_image.load_img(image_path, target_size=(299, 299))
-        features[i] = keras_image.img_to_array(image)
-    features = preprocess_input(features)
-    predictions = model.predict(features)
-    results = {}
-    for i in range(len(paths)):
-        results[paths[i]] = np.argmax(predictions[i])
-    with open('classify_result', 'w+') as f:
-        json.dump(results, f)
-elif mode == 'train_rank':
-    if 'deeprank.h5' in os.listdir('.'):
+        # Start train.
+        model.fit(features, labels, batch_size=4, epochs=16, validation_split=0.1)
+        model.save('./resnet.h5')
+    elif mode == 'classify':
+        model = load_model('./resnet.h5')
+        paths = config['path_files_to_be_classified']
+        features = np.zeros((len(paths), 299, 299, 3))
+        for i, image_path in tqdm(list(enumerate(paths)), ascii=True):
+            image = keras_image.load_img(image_path, target_size=(299, 299))
+            features[i] = keras_image.img_to_array(image)
+        features = preprocess_input(features)
+        predictions = model.predict(features)
+        results = {}
+        for i in range(len(paths)):
+            results[paths[i]] = np.argmax(predictions[i])
+        with open('classify_result', 'w+') as f:
+            json.dump(results, f)
+    elif mode == 'train_rank':
+        if 'deeprank.h5' in os.listdir('.'):
+            model = load_model('deeprank.h5', custom_objects={'hinge_loss': hinge_loss})
+        else:
+            model = deep_rank_model()
+            sgd = SGD(lr=0.001, momentum=0.9, nesterov=True)
+            model.compile(sgd, loss=hinge_loss)
+        image_root = config['image_root']
+        model.fit_generator(
+            train_data_generator(image_root), 128, 128, shuffle=False, callbacks=[ModelCheckpoint('deeprank.h5')])
+    elif mode == 'index_rank':
         model = load_model('deeprank.h5', custom_objects={'hinge_loss': hinge_loss})
-    else:
-        model = deep_rank_model()
-        sgd = SGD(lr=0.001, momentum=0.9, nesterov=True)
-        model.compile(sgd, loss=hinge_loss)
-    image_root = config['image_root']
-    model.fit_generator(
-        train_data_generator(image_root), 128, 128, shuffle=False, callbacks=[ModelCheckpoint('deeprank.h5')])
-elif mode == 'index_rank':
-    model = load_model('deeprank.h5', custom_objects={'hinge_loss': hinge_loss})
-    image_root = config['image_root']
-    image_names = os.listdir(image_root)
-    index = []
-    data = np.zeros((len(image_names), 512))
-    for i, image_name in tqdm(list(enumerate(image_names)), ascii=True):
-        index.append(image_name)
-        image = keras_image.load_img(os.path.join(image_root, image_name), target_size=(299, 299))
-        image = keras_image.img_to_array(image)
-        image = preprocess_input(np.expand_dims(image, axis=0))
-        data[i] = model.predict(image)[0]
-    with open('db_index.json', 'w+') as f:
-        json.dump(index, f)
-    np.save('db_data.npy', data)
-elif mode == 'similar_rank':
-    model = load_model('deeprank.h5', custom_objects={'hinge_loss': hinge_loss})
-    with open('db_index.json') as f:
-        index = json.load(f)
-    data = np.load('db_data.npy')
-    images = config['path_files_to_be_found_similar']
-    image_root = config['image_root']
+        image_root = config['image_root']
+        image_names = os.listdir(image_root)
+        index = []
+        data = np.zeros((len(image_names), 512))
+        for i, image_name in tqdm(list(enumerate(image_names)), ascii=True):
+            index.append(image_name)
+            image = keras_image.load_img(os.path.join(image_root, image_name), target_size=(299, 299))
+            image = keras_image.img_to_array(image)
+            image = preprocess_input(np.expand_dims(image, axis=0))
+            data[i] = model.predict(image)[0]
+        with open('db_index.json', 'w+') as f:
+            json.dump(index, f)
+        np.save('db_data.npy', data)
+    elif mode == 'similar_rank':
+        model = load_model('deeprank.h5', custom_objects={'hinge_loss': hinge_loss})
+        with open('db_index.json') as f:
+            index = json.load(f)
+        data = np.load('db_data.npy')
+        images = config['path_files_to_be_found_similar']
+        image_root = config['image_root']
 
-    result = {}
-    for cat_path in images:
-        image_cat = cat_path.split('@')[0]
-        image_path = cat_path.split('@')[1]
-        image = keras_image.load_img(image_path, target_size=(299, 299))
-        image = keras_image.img_to_array(image)
-        image = preprocess_input(np.expand_dims(image, axis=0))
-        feature = model.predict(image)[0]
-        distances = data - feature
-        distance_rank = []
-        for i in range(distances.shape[0]):
-            distances.append((np.linalg.norm(distances[i])), index[i])
-        distance_rank.sort(key=lambda arg: arg[0])
-        distance_rank = distance_rank[:20]
-        for i in range(len(distance_rank)):
-            image_1_path = os.path.join(image_root, distance_rank[i][1])
-            image_2_path = image_path
-            distance_rank[i][0] = get_em_distance(image_1_path, image_2_path)
-        distance_rank.sort(key=lambda arg: arg[0])
-        distance_rank = distance_rank[:10]
-        result[cat_path] = distance_rank
-    print(result)
+        result = {}
+        for cat_path in images:
+            image_cat = cat_path.split('@')[0]
+            image_path = cat_path.split('@')[1]
+            image = keras_image.load_img(image_path, target_size=(299, 299))
+            image = keras_image.img_to_array(image)
+            image = preprocess_input(np.expand_dims(image, axis=0))
+            feature = model.predict(image)[0]
+            distances = data - feature
+            distance_rank = []
+            for i in range(distances.shape[0]):
+                distances.append((np.linalg.norm(distances[i])), index[i])
+            distance_rank.sort(key=lambda arg: arg[0])
+            distance_rank = distance_rank[:20]
+            for i in range(len(distance_rank)):
+                image_1_path = os.path.join(image_root, distance_rank[i][1])
+                image_2_path = image_path
+                distance_rank[i][0] = get_em_distance(image_1_path, image_2_path)
+            distance_rank.sort(key=lambda arg: arg[0])
+            distance_rank = distance_rank[:10]
+            result[cat_path] = distance_rank
+        print(result)
