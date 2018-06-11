@@ -6,6 +6,8 @@ import keras
 import numpy as np
 import yaml
 
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+
 from imgaug import augmenters as iaa
 from keras import Model, Input
 from keras import backend as K
@@ -55,7 +57,7 @@ def get_image_hist(image_path):
             hist_slice = cv2.calcHist([hsv], [0, 1], None, [H_CHANNEL, S_CHANNEL], [0, 180, 0, 256])
             cv2.normalize(hist_slice, hist_slice)
             while True:
-                new_hist = (np.vectorize(lambda arg: 0 if arg < 0.01 else arg))(hist_slice)
+                new_hist = (np.vectorize(lambda arg: 0 if arg < 0.01 else arg))(hist_slice).astype(np.float32).copy()
                 cv2.normalize(new_hist, new_hist)
                 if np.array_equal(new_hist, hist_slice):
                     break
@@ -84,6 +86,7 @@ def get_em_distance(image_path_1, image_path_2):
     distance = cv2.EMD(sig1, sig2, cv2.DIST_L2)[0]
     return distance
 
+# get_em_distance(r'/media/dz/Data/University/2018Spring/Data_Structure_and_Algorithms(2)/DS&Alg-Project1-Release/data/image/n01613177_992.JPEG',r'/media/dz/Data/University/2018Spring/Data_Structure_and_Algorithms(2)/DS&Alg-Project1-Release/data/image/n01613177_1299.JPEG')
 
 def hinge_loss(_, y_pred):
     y_pred = K.clip(y_pred, K.epsilon(), 1 - K.epsilon())
@@ -123,7 +126,7 @@ def train_data_generator(image_root) -> tuple:
         ret_x = np.ndarray((BATCH_SIZE, 299, 299, 3))
         for i in range(int(BATCH_SIZE / 3)):
             sample = random.sample(images, 2)
-            sample = list(map(lambda x: image_root + '\\' + x, sample))
+            sample = list(map(lambda x: image_root + '/' + x, sample))
             triplet = generate_triplet(sample[0], sample[1])
             ret_x[3 * i + 0] = triplet[0]
             ret_x[3 * i + 1] = triplet[1]
@@ -221,8 +224,8 @@ if __name__ == '__main__':
         predictions = model.predict(features)
         results = {}
         for i in range(len(paths)):
-            results[paths[i]] = np.argmax(predictions[i])
-        with open('classify_result', 'w+') as f:
+            results[paths[i]] = str(np.argmax(predictions[i]))
+        with open('classify_result.json', 'w+') as f:
             json.dump(results, f)
     elif mode == 'train_rank':
         if 'deeprank.h5' in os.listdir('.'):
@@ -261,6 +264,7 @@ if __name__ == '__main__':
         for cat_path in images:
             image_cat = cat_path.split('@')[0]
             image_path = cat_path.split('@')[1]
+            print(image_path)
             image = keras_image.load_img(image_path, target_size=(299, 299))
             image = keras_image.img_to_array(image)
             image = preprocess_input(np.expand_dims(image, axis=0))
@@ -268,7 +272,8 @@ if __name__ == '__main__':
             distances = data - feature
             distance_rank = []
             for i in range(distances.shape[0]):
-                distances.append((np.linalg.norm(distances[i])), index[i])
+                if get_category_number(index[i], config) == int(image_cat):
+                    distance_rank.append([np.linalg.norm(distances[i]), index[i]])
             distance_rank.sort(key=lambda arg: arg[0])
             distance_rank = distance_rank[:20]
             for i in range(len(distance_rank)):
