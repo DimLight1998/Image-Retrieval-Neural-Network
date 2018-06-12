@@ -5,3 +5,4 @@
 *.json
 *.h5
 *.npy
+!result.json
