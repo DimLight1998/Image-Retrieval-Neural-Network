@@ -2,3 +2,6 @@
 *weights.h5.1
 .vscode/
 
+*.json
+*.h5
+*.npy

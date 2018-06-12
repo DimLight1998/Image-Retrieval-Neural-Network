@@ -6,7 +6,7 @@ import keras
 import numpy as np
 import yaml
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+# os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
 from imgaug import augmenters as iaa
 from keras import Model, Input
@@ -57,15 +57,14 @@ def get_image_hist(image_path):
             hist_slice = cv2.calcHist([hsv], [0, 1], None, [H_CHANNEL, S_CHANNEL], [0, 180, 0, 256])
             cv2.normalize(hist_slice, hist_slice)
             while True:
-                new_hist = (np.vectorize(lambda arg: 0 if arg < 0.01 else arg))(hist_slice).astype(np.float32).copy()
+                new_hist = (np.vectorize(lambda arg: 0.0 if arg < 0.01 else arg))(hist_slice).astype(np.float32).copy()
                 cv2.normalize(new_hist, new_hist)
-                if np.array_equal(new_hist, hist_slice):
+                if np.allclose(new_hist, hist_slice):
                     break
                 else:
-                    hist_slice = new_hist
+                    hist_slice = new_hist.copy()
             dense_hist[i, j] = hist_slice
     return dense_hist
-
 
 def get_signature_from_hist(hist):
     sig = np.array([], dtype=np.float32).reshape((0, 5))
@@ -85,8 +84,6 @@ def get_em_distance(image_path_1, image_path_2):
     sig2 = get_signature_from_hist(hist2).astype(np.float32)
     distance = cv2.EMD(sig1, sig2, cv2.DIST_L2)[0]
     return distance
-
-# get_em_distance(r'/media/dz/Data/University/2018Spring/Data_Structure_and_Algorithms(2)/DS&Alg-Project1-Release/data/image/n01613177_992.JPEG',r'/media/dz/Data/University/2018Spring/Data_Structure_and_Algorithms(2)/DS&Alg-Project1-Release/data/image/n01613177_1299.JPEG')
 
 
 def hinge_loss(_, y_pred):
@@ -286,25 +283,30 @@ if __name__ == '__main__':
             result[cat_path] = distance_rank
         print(result)
     elif mode == 'final':
-        classify_model = load_model('./resnet.h5')
         image_paths = config['path_test']
-        features = np.zeros((len(paths), 299, 299, 3))
-        for i, image_path in tqdm(list(enumerate(image_paths)), ascii=True):
-            image = keras_image.load_img(image_path, target_size=(299, 299))
-            features[i] = keras_image.img_to_array(image)
-        print('start preprocessing...')
-        features = preprocess_input(features)
-        print('preprocessing done, start predicting...')
-        predictions = classify_model.predict(features)
-        categories = np.argmax(predictions, axis=1)
-        del features
-        del classify_model
+        if os.path.exists('categories.npy'):
+            categories = np.load('categories.npy')
+        else:
+            classify_model = load_model('./resnet.h5')
+            features = np.zeros((len(image_paths), 299, 299, 3))
+            for i, image_path in tqdm(list(enumerate(image_paths)), ascii=True):
+                image = keras_image.load_img(image_path, target_size=(299, 299))
+                features[i] = keras_image.img_to_array(image)
+            print('start preprocessing...')
+            features = preprocess_input(features)
+            print('preprocessing done, start predicting...')
+            predictions = classify_model.predict(features, batch_size=4, verbose=1)
+            categories = np.argmax(predictions, axis=1)
+            np.save('categories.npy', categories)
+            del predictions
+            del features
+            del classify_model
 
-        rank_model = load_model('./deeprank.h5')
+        rank_model = load_model('./deeprank.h5', custom_objects={'hinge_loss': hinge_loss})
         with open('db_index.json') as f:
             db_index = json.load(f)
         db_data = np.load('db_data.npy')
-        image_root = config('image_root')
+        image_root = config['image_root']
         result = {}
         for i, image_path in tqdm(list(enumerate(image_paths)), ascii=True):
             image = keras_image.load_img(image_path, target_size=(299, 299))
@@ -314,19 +316,20 @@ if __name__ == '__main__':
             rank_feature = rank_model.predict(image_array)[0]
             rank = []
             for j in range(len(db_index)):
-                rank.append([db_index[i], np.linalg.norm(rank_feature - db_data[i])])
-            rank.sort(lambda arg: arg[1])
+                if get_category_number(db_index[j], config) == int(categories[i]):
+                    rank.append([db_index[j], np.linalg.norm(rank_feature - db_data[j])])
+            rank.sort(key=lambda arg: arg[1])
             rank = rank[:20]
             rank_dict = {item[0]: item[1] for item in rank}
             for j in range(20):
-                path1 = os.path.join(image_root, db_index[i])
+                path1 = os.path.join(image_root, rank[j][0])
                 path2 = image_path
                 emd = get_em_distance(path1, path2)
                 rank[j][1] = emd
-            rank.sort(lambda arg: arg[1])
+            rank.sort(key=lambda arg: arg[1])
             rank = rank[:10]
-            rank.sort(lambda arg: rank_dict[arg])
+            rank.sort(key=lambda arg: rank_dict[arg[0]])
             result[image_path] = rank
         print(result)
-        with open('result.json', 'w') as f:
+        with open('result.json', 'w+') as f:
             json.dump(result, f)
