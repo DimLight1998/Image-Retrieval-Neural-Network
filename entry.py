@@ -51,8 +51,8 @@ def get_image_hist(image_path):
     for i in range(SPLIT_NUM):
         for j in range(SPLIT_NUM):
             img_slice = image[
-                        int(i * num_row / SPLIT_NUM):int((i + 1) * num_row / SPLIT_NUM),
-                        int(j * num_col / SPLIT_NUM):int((j + 1) * num_col / SPLIT_NUM)]
+                int(i * num_row / SPLIT_NUM):int((i + 1) * num_row / SPLIT_NUM),
+                int(j * num_col / SPLIT_NUM):int((j + 1) * num_col / SPLIT_NUM)]
             hsv = cv2.cvtColor(img_slice, cv2.COLOR_BGR2HSV)
             hist_slice = cv2.calcHist([hsv], [0, 1], None, [H_CHANNEL, S_CHANNEL], [0, 180, 0, 256])
             cv2.normalize(hist_slice, hist_slice)
@@ -87,6 +87,7 @@ def get_em_distance(image_path_1, image_path_2):
     return distance
 
 # get_em_distance(r'/media/dz/Data/University/2018Spring/Data_Structure_and_Algorithms(2)/DS&Alg-Project1-Release/data/image/n01613177_992.JPEG',r'/media/dz/Data/University/2018Spring/Data_Structure_and_Algorithms(2)/DS&Alg-Project1-Release/data/image/n01613177_1299.JPEG')
+
 
 def hinge_loss(_, y_pred):
     y_pred = K.clip(y_pred, K.epsilon(), 1 - K.epsilon())
@@ -284,3 +285,48 @@ if __name__ == '__main__':
             distance_rank = distance_rank[:10]
             result[cat_path] = distance_rank
         print(result)
+    elif mode == 'final':
+        classify_model = load_model('./resnet.h5')
+        image_paths = config['path_test']
+        features = np.zeros((len(paths), 299, 299, 3))
+        for i, image_path in tqdm(list(enumerate(image_paths)), ascii=True):
+            image = keras_image.load_img(image_path, target_size=(299, 299))
+            features[i] = keras_image.img_to_array(image)
+        print('start preprocessing...')
+        features = preprocess_input(features)
+        print('preprocessing done, start predicting...')
+        predictions = classify_model.predict(features)
+        categories = np.argmax(predictions, axis=1)
+        del features
+        del classify_model
+
+        rank_model = load_model('./deeprank.h5')
+        with open('db_index.json') as f:
+            db_index = json.load(f)
+        db_data = np.load('db_data.npy')
+        image_root = config('image_root')
+        result = {}
+        for i, image_path in tqdm(list(enumerate(image_paths)), ascii=True):
+            image = keras_image.load_img(image_path, target_size=(299, 299))
+            image_array = keras_image.img_to_array(image)
+            image_array = preprocess_input(image_array)
+            image_array = np.expand_dims(image_array, axis=0)
+            rank_feature = rank_model.predict(image_array)[0]
+            rank = []
+            for j in range(len(db_index)):
+                rank.append([db_index[i], np.linalg.norm(rank_feature - db_data[i])])
+            rank.sort(lambda arg: arg[1])
+            rank = rank[:20]
+            rank_dict = {item[0]: item[1] for item in rank}
+            for j in range(20):
+                path1 = os.path.join(image_root, db_index[i])
+                path2 = image_path
+                emd = get_em_distance(path1, path2)
+                rank[j][1] = emd
+            rank.sort(lambda arg: arg[1])
+            rank = rank[:10]
+            rank.sort(lambda arg: rank_dict[arg])
+            result[image_path] = rank
+        print(result)
+        with open('result.json', 'w') as f:
+            json.dump(result, f)

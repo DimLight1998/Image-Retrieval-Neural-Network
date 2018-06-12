@@ -30,8 +30,8 @@ result_category_map:
 
 image_root: 'G:\Workspace\DS&Alg-Project1-Release\data\image'
 
-# Mode. [train_classify, classify, train_rank, index_rank, similar_rank]
-mode: train_rank
+# Mode. [train_classify, classify, train_rank, index_rank, similar_rank, final]
+mode: final
 
 category_map:
   n03767203: 0
@@ -57,10 +57,10 @@ category_map_rev:
   8: n11669921
   9: n01923025
 
-path_files_to_be_classified:
-  balah1
-  balah2
+path_files_to_be_classified: null
 
-path_files_to_be_found_similar:
-  cate_alpha
-  '1_G:\Workspace...'
+path_files_to_be_found_similar: null
+
+# In format: \path\to\images\imagename.jpg
+path_test:
+ - \path\to\images\imagename.jpg
